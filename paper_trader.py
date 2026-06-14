@@ -72,8 +72,21 @@ def load_data(ticker: str, data_dir: str = "data") -> pd.DataFrame:
     return df
 
 
+def _get_toolkit_dir() -> Path:
+    here = Path(__file__).resolve().parent
+    candidates = [
+        here / "ai-trading-floor" / "ai-trading-floor" / "scripts",
+        here / "ai-trading-floor" / "scripts",
+        Path("/app") / "ai-trading-floor" / "ai-trading-floor" / "scripts",
+        Path("/app") / "ai-trading-floor" / "scripts",
+    ]
+    for p in candidates:
+        if (p / "backtest.py").exists():
+            return p
+    return candidates[0]
+
 def compute_signal(ticker: str, strategy: str, params: dict) -> int:
-    toolkit_dir = Path(__file__).resolve().parent / "ai-trading-floor" / "ai-trading-floor" / "scripts"
+    toolkit_dir = _get_toolkit_dir()
     sys.path.insert(0, str(toolkit_dir))
     import backtest as bt
 
