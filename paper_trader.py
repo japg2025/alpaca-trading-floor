@@ -86,7 +86,24 @@ def _get_toolkit_dir() -> Path:
     return candidates[0]
 
 def compute_signal(ticker: str, strategy: str, params: dict) -> int:
-    toolkit_dir = _get_toolkit_dir()
+    toolkit_dir = None
+    for candidate in [
+        Path("/app/ai-trading-floor/ai-trading-floor/scripts"),
+        Path("/app/ai-trading-floor/scripts"),
+    ]:
+        if (candidate / "backtest.py").exists():
+            toolkit_dir = candidate
+            break
+
+    if toolkit_dir is None:
+        raise FileNotFoundError(
+            f"backtest.py not found. Contents of /app:\n"
+            + "\n".join(
+                f"- {p}"
+                for p in sorted(Path("/app").glob("*"))
+            )
+        )
+
     sys.path.insert(0, str(toolkit_dir))
     import backtest as bt
 
