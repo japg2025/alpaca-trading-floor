@@ -1,5 +1,8 @@
 FROM python:3.11-slim
 
+ARG CACHEBUST=1
+RUN echo "Cache bust: $CACHEBUST"
+
 # Install system deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
@@ -7,12 +10,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install Python deps
 COPY deploy/requirements.txt /app/deploy/requirements.txt
 RUN pip install --no-cache-dir -r /app/deploy/requirements.txt
 
-# Copy app code
 COPY . /app
 
-# Default command ( Railway will override with startCommand in railway.toml )
 CMD ["bash", "deploy/run_trader.sh"]

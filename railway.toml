@@ -1,6 +1,7 @@
 [build]
-builder = "nixpacks"
-buildCommand = "pip install -r deploy/requirements.txt"
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+buildCommand = "docker build --build-arg CACHEBUST=$(date +%s) -t alpaca-trader ."
 
 [deploy]
 startCommand = "bash deploy/run_trader.sh"
