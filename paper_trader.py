@@ -17,12 +17,12 @@ from dotenv import load_dotenv
 SCHEMA = ["Date", "Open", "High", "Low", "Close", "Volume"]
 
 PORTFOLIO_LEGS = [
-    {"ticker": "AAPL", "strategy": "breakout", "params": {}},
-    {"ticker": "GLD",  "strategy": "sma_crossover", "params": {}},
-    {"ticker": "SLV",  "strategy": "sma_crossover", "params": {}},
-    {"ticker": "XLI",  "strategy": "bollinger_meanrev", "params": {}},
-    {"ticker": "IWM",  "strategy": "bollinger_meanrev", "params": {}},
-    {"ticker": "MSFT", "strategy": "anchored_vwap_trend", "params": {}},
+    {"ticker": "AAPL", "strategy": "rsi_bullish_divergence", "params": {"timeframe_minutes": 15}},
+    {"ticker": "QQQ",  "strategy": "rsi_bullish_divergence", "params": {"timeframe_minutes": 15}},
+    {"ticker": "SPY",  "strategy": "rsi_bullish_divergence", "params": {"timeframe_minutes": 15}},
+    {"ticker": "IWM",  "strategy": "rsi_bullish_divergence", "params": {"timeframe_minutes": 15}},
+    {"ticker": "GLD",  "strategy": "rsi_bullish_divergence", "params": {"timeframe_minutes": 15}},
+    {"ticker": "SLV",  "strategy": "rsi_bullish_divergence", "params": {"timeframe_minutes": 15}},
 ]
 
 
@@ -41,20 +41,26 @@ def get_alpaca_clients():
     return trading, data_client
 
 
-def load_data(ticker: str, data_dir: str = "data") -> pd.DataFrame:
+def load_data(ticker: str, data_dir: str = "data", timeframe_minutes: int | None = None) -> pd.DataFrame:
     path = Path(data_dir) / f"{ticker}.parquet"
     if path.exists():
         df = pd.read_parquet(path)
     else:
         from alpaca.data.requests import StockBarsRequest
-        from alpaca.data.timeframe import TimeFrame
+        from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 
         _, data_client = get_alpaca_clients()
         end = datetime.now()
         start = end - timedelta(days=120)
+
+        if timeframe_minutes:
+            tf = TimeFrame(timeframe_minutes, TimeFrameUnit.Minute)
+        else:
+            tf = TimeFrame.Day
+
         req = StockBarsRequest(
             symbol_or_symbols=ticker,
-            timeframe=TimeFrame.Day,
+            timeframe=tf,
             start=start, end=end,
             feed="iex",
         )
@@ -87,53 +93,72 @@ def _get_toolkit_dir() -> Path:
     return candidates[0]
 
 def compute_signal(ticker: str, strategy: str, params: dict) -> int:
-    toolkit_dir = None
-    for candidate in [
-        Path("/app/ai-trading-floor/ai-trading-floor/scripts"),
-        Path("/app/ai-trading-floor/scripts"),
-    ]:
-        if (candidate / "backtest.py").exists():
-            toolkit_dir = candidate
-            break
+    if strategy != "rsi_bullish_divergence":
+        raise ValueError(f"Unknown strategy: {strategy}")
 
-    if toolkit_dir is None:
-        raise FileNotFoundError(
-            f"backtest.py not found. Contents of /app:\n"
-            + "\n".join(
-                f"- {p}"
-                for p in sorted(Path("/app").glob("*"))
-            )
-        )
+    timeframe_minutes = params.get("timeframe_minutes")
+    df = load_data(ticker, timeframe_minutes=timeframe_minutes)
+    df = df.sort_values("Date").reset_index(drop=True)
 
-    sys.path.insert(0, str(toolkit_dir))
-    import backtest as bt
-
-    df = load_data(ticker)
-    if len(df) < 60:
-        print(f"  WARNING: {ticker} only has {len(df)} bars — not enough for signal")
+    if len(df) < 30:
         return 0
 
-    fn = bt.STRATEGIES[strategy].fn
-    result = fn(df, **params)
+    closes = df["Close"]
+    rsi_values = _rsi(closes)
+    swing_lows = _find_swing_lows(closes)
+    rsi_lows = _find_swing_lows(rsi_values)
 
-    if isinstance(result, tuple):
-        sig = result[0]
-    else:
-        sig = result
+    in_trade = False
 
-    if isinstance(sig, pd.Series):
-        last = sig.dropna()
-        if last.empty:
-            return 0
-        val = last.iloc[-1]
-    else:
-        val = sig
-        if pd.isna(val):
-            return 0
+    for i in range(4, len(df)):
+        if pd.isna(rsi_values.iloc[i]):
+            continue
 
-    if isinstance(val, (bool, pd.BooleanDtype)):
-        return 1 if val else 0
-    return int(val)
+        if in_trade:
+            if rsi_values.iloc[i] > 60:
+                in_trade = False
+            continue
+
+        if not swing_lows.iloc[i]:
+            continue
+
+        prev_idx = None
+        for j in range(i - 1, 2, -1):
+            if swing_lows.iloc[j]:
+                prev_idx = j
+                break
+
+        if prev_idx is None:
+            continue
+
+        price_curr = closes.iloc[i]
+        price_prev = closes.iloc[prev_idx]
+        rsi_curr = rsi_values.iloc[i]
+        rsi_prev = rsi_values.iloc[prev_idx]
+
+        if price_curr < price_prev and rsi_curr > rsi_prev and rsi_curr < 45:
+            return 1
+
+    return 0
+
+
+def _rsi(series: pd.Series, period: int = 14) -> pd.Series:
+    delta = series.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+    rs = avg_gain / avg_loss.replace(0, 1e-9)
+    return 100 - 100 / (1 + rs)
+
+
+def _find_swing_lows(series: pd.Series, lookback: int = 3) -> pd.Series:
+    lows = pd.Series(False, index=series.index)
+    for i in range(lookback, len(series) - lookback):
+        window = series.iloc[i - lookback : i + lookback + 1]
+        if series.iloc[i] == window.min():
+            lows.iloc[i] = True
+    return lows
 
 
 def get_account_summary(trading) -> dict:
