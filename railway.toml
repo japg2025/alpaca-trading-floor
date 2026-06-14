@@ -1,0 +1,8 @@
+[build]
+builder = "nixpacks"
+buildCommand = "pip install -r deploy/requirements.txt"
+
+[deploy]
+startCommand = "bash deploy/run_trader.sh"
+restartPolicyType = "never"
+cronSchedule = "30 14 * * 1-5"
