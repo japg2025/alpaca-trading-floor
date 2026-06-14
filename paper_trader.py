@@ -56,6 +56,7 @@ def load_data(ticker: str, data_dir: str = "data") -> pd.DataFrame:
             symbol_or_symbols=ticker,
             timeframe=TimeFrame.Day,
             start=start, end=end,
+            feed="iex",
         )
         bars = data_client.get_stock_bars(req)
         df = bars.df.reset_index()
