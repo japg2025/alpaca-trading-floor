@@ -350,10 +350,16 @@ def main():
                         help="Comma-separated tickers (default: all portfolio legs)")
     parser.add_argument("--show-account", action="store_true",
                         help="Only show account status, no trading")
+    parser.add_argument("--summary", action="store_true",
+                        help="Send daily summary via Telegram and exit")
     args = parser.parse_args()
 
     load_dotenv()
-    trading, data_client = get_alpaca_clients()
+    trading, _ = get_alpaca_clients()
+
+    if args.summary:
+        build_daily_summary(trading)
+        return
 
     print_account(trading)
 
