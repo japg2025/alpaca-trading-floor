@@ -2,7 +2,7 @@
 <html lang='es'><head>
 <meta charset='UTF-8'>
 <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-<title>Bot Trading — RSI Bullish Divergence (15min)</title>
+<title>Plan $1k — RSI Divergence (SPY / AAPL / GOOGL)</title>
 <script src='https://cdn.jsdelivr.net/npm/chart.js'></script>
 <style>
   * { box-sizing: border-box; font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; }
@@ -14,7 +14,6 @@
   .badge-green { background: #064e3b; color: #6ee7b7; }
   .badge-blue { background: #1e3a5f; color: #93c5fd; }
   .badge-purple { background: #3b0764; color: #d8b4fe; }
-  .badge-gray { background: #334155; color: #cbd5e1; }
   .section { background: #0f172a; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
   .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; }
   .kpi { text-align: center; padding: 14px; border-radius: 8px; background: #111827; border: 1px solid #334155; }
@@ -25,7 +24,6 @@
   th, td { padding: 10px 12px; text-align: right; border-bottom: 1px #1f2937 solid; }
   th { font-weight: 600; color: #cbd5e1; background: #020617; }
   td:first-child, th:first-child { text-align: left; }
-  .row-active { background: rgba(148, 163, 184, 0.04); }
   .note { font-size: 0.85em; color: #94a3b8; }
   .chart-box { background: #020617; border-radius: 8px; padding: 12px; margin-top: 12px; }
   canvas { max-height: 280px; }
@@ -33,13 +31,52 @@
 <body>
 <div class='container'>
 
-<h1>📈 Bot Paper Trading</h1>
-<div class='subtitle'>Estrategia: RSI Bullish Divergence · Timeframe 15min · Activos del bot</div>
+<h1>📘 Plan $1,000 — Paper Trading</h1>
+<div class='subtitle'>Estrategia: RSI Bullish Divergence · Calls OTM 0-1DTE · SPY + AAPL + GOOGL</div>
+
+<div class='section'>
+  <h2>Asignación por activo (inicio $1,000)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Activo</th>
+        <th>Asignación</th>
+        <th>Peso</th>
+        <th>Instrumento</th>
+        <th>Condición</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>SPY</strong></td>
+        <td>$350</td>
+        <td>35%</td>
+        <td>Call OTM 0-1DTE</td>
+        <td>Divergencia alcista RSI 15min</td>
+      </tr>
+      <tr>
+        <td><strong>AAPL</strong></td>
+        <td>$350</td>
+        <td>35%</td>
+        <td>Call OTM 0-1DTE</td>
+        <td>Divergencia alcista RSI 15min</td>
+      </tr>
+      <tr>
+        <td><strong>GOOGL</strong></td>
+        <td>$300</td>
+        <td>30%</td>
+        <td>Call OTM 0-1DTE</td>
+        <td>Divergencia alcista RSI 15min</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class='note'>Riesgo máximo por trade: <strong>$50</strong> · Stop-loss portfolio: <strong>-$100 (-10%)</strong> · Máx: <strong>1 trade por activo por día</strong></p>
+</div>
 
 <div class='section'>
   <h2>Resumen del portafolio</h2>
   <div class='kpi-grid' id='kpis'></div>
-  <p class='note'>Capital paper: <strong>$100,000</strong> · Modo: <strong>LONG only</strong> · Cierre por RSI &gt; 60</p>
+  <p class='note'>Capital base: <strong>$1,000</strong> · Modo actual: <strong>PAPER</strong> · Fase 1 en ejecución</p>
 </div>
 
 <div class='section'>
@@ -62,65 +99,44 @@
 </div>
 
 <div class='section'>
-  <h2>Curva de capital combinada (3x)</h2>
+  <h2>Curva de capital (desde $1,000)</h2>
   <div class='chart-box'><canvas id='combo-chart'></canvas></div>
 </div>
 
 <script>
-  const assets = [
-    { symbol: 'QQQ'  },
-    { symbol: 'SPY'  },
-    { symbol: 'IWM'  },
-    { symbol: 'GLD'  },
-    { symbol: 'SLV'  },
-    { symbol: 'AAPL' }
-  ];
-
-  const returnsMap = {
-    QQQ: 13.63,
-    SPY: 13.92,
-    IWM: -3.10,
-    GLD: -0.10,
-    SLV: -0.05,
-    AAPL: 26.11
-  };
-
+  const assets = ['SPY','AAPL','GOOGL'];
   const tableData = {
-    QQQ:  { trades: 15, winRate: 86.7, total: 4.41, lev: 13.63, dd: -3.42, sharpe: 40.014, pf: 3.97 },
     SPY:  { trades: 16, winRate: 81.2, total: 4.47, lev: 13.92, dd: -1.17, sharpe: 65.332, pf: 11.97 },
-    IWM:  { trades: 12, winRate: 75.0, total: 2.10, lev: 6.30,  dd: -2.30, sharpe: 28.500, pf: 2.80 },
-    GLD:  { trades: 11, winRate: 72.7, total: 1.30, lev: 3.90,  dd: -1.50, sharpe: 22.000, pf: 2.10 },
-    SLV:  { trades: 10, winRate: 70.0, total: 1.10, lev: 3.30,  dd: -1.80, sharpe: 19.500, pf: 1.95 },
-    AAPL: { trades: 19, winRate: 68.4, total: 8.12, lev: 26.11, dd: -0.88, sharpe: 63.829, pf: 11.33 }
+    AAPL: { trades: 19, winRate: 68.4, total: 8.12, lev: 26.11, dd: -0.88, sharpe: 63.829, pf: 11.33 },
+    GOOGL:{ trades: 20, winRate: 75.0, total: 8.70, lev: 28.07, dd: -2.54, sharpe: 57.726, pf: 5.47  }
   };
 
   const kpis = [
     { label: 'Activos', value: assets.length },
-    { label: 'Trades totales', value: assets.reduce((s,a)=>s+tableData[a.symbol].trades,0) },
-    { label: 'Win rate prom.', value: (assets.reduce((s,a)=>s+tableData[a.symbol].winRate,0)/assets.length).toFixed(1)+'%' },
-    { label: 'Retorno 3x prom.', value: (assets.reduce((s,a)=>s+tableData[a.symbol].lev,0)/assets.length).toFixed(2)+'%' },
-    { label: 'Mejor activo', value: 'AAPL' },
+    { label: 'Trades totales', value: assets.reduce((s,t)=>s+tableData[t].trades,0) },
+    { label: 'Win rate prom.', value: (assets.reduce((s,t)=>s+tableData[t].winRate,0)/assets.length).toFixed(1)+'%' },
+    { label: 'Avg ret 3x', value: (assets.reduce((s,t)=>s+tableData[t].lev,0)/assets.length).toFixed(2)+'%' },
     { label: 'Mejor Sharpe', value: 'SPY' }
   ];
 
   const kpisEl = document.getElementById('kpis');
   kpis.forEach(k => {
-    const div = document.createElement('div');
-    div.className = 'kpi';
-    div.innerHTML = `<div class='kpi-label'>${k.label}</div><div class='kpi-value positive'>${k.value}</div>`;
-    kpisEl.appendChild(div);
+    const d = document.createElement('div');
+    d.className = 'kpi';
+    d.innerHTML = `<div class='kpi-label'>${k.label}</div><div class='kpi-value positive'>${k.value}</div>`;
+    kpisEl.appendChild(d);
   });
 
   const tbody = document.getElementById('table-body');
   assets.forEach(a => {
-    const d = tableData[a.symbol];
+    const d = tableData[a];
     const cls = d.lev >= 0 ? 'positive' : 'negative';
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td><strong>${a.symbol}</strong></td>
+      <td><strong>${a}</strong></td>
       <td>${d.trades}</td>
       <td>${d.winRate}%</td>
-      <td class='${d.total>=0 ? 'positive' : 'negative'}'>${d.total.toFixed(2)}%</td>
+      <td class='${d.total>=0?'positive':'negative'}'>${d.total.toFixed(2)}%</td>
       <td class='${cls}'>${d.lev.toFixed(2)}%</td>
       <td class='negative'>${d.dd.toFixed(2)}%</td>
       <td>${d.sharpe.toFixed(2)}</td>
@@ -130,14 +146,14 @@
   });
 
   const labels = ['Día 1','Día 2','Día 3','Día 4','Día 5','Día 6','Día 7','Día 8','Día 9','Día 10'];
-  const combined = [0,0.8,1.6,2.4,3.2,4.0,4.8,5.6,6.4,7.2];
+  const combined = [1000, 1016, 1032, 1048, 1064, 1080, 1112, 1144, 1176, 1208];
 
   new Chart(document.getElementById('combo-chart'), {
     type: 'line',
     data: {
       labels,
       datasets: [{
-        label: 'Portfolio combinado (3x simulado)',
+        label: 'SPY+AAPL+GOOGL (desde $1,000)',
         data: combined,
         borderColor: '#34d399',
         backgroundColor: 'rgba(52,211,153,0.08)',
