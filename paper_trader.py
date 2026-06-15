@@ -325,6 +325,19 @@ def rebalance_portfolio(trading, signals: list, capital: float,
     return executed
 
 
+def send_telegram_message(text: str):
+    try:
+        token = os.environ.get("TELEGRAM_BOT_TOKEN")
+        chat_id = os.environ.get("TELEGRAM_ALLOWED_USERS", "").split(",")[0].strip()
+        if not token or not chat_id:
+            return
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}
+        import urllib.request
+        req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=10)
+    except Exception as e:
+        print(f"  Warning: Telegram notification failed: {e}")
 def main():
     parser = argparse.ArgumentParser(description="Alpaca Paper Trading")
     parser.add_argument("--dry-run", action="store_true",
@@ -354,7 +367,7 @@ def main():
         legs = PORTFOLIO_LEGS
 
     if args.capital:
-        capital = args.capital
+        capital = float(args.capital)
     else:
         capital = 1000.0  # Plan de ejecución: $1,000 base
 
@@ -363,7 +376,8 @@ def main():
     print(f"  Legs: {len(legs)} strategies")
     print()
 
-    # Generate signals
+    # Telegram: notificar señales generadas
+    telegram_lines = [f"📡 *Señales generadas* — {datetime.now().strftime('%Y-%m-%d %H:%M ET')}\n"]
     signals = []
     print("Generating signals...")
     for leg in legs:
@@ -372,11 +386,12 @@ def main():
             signal = compute_signal(leg["ticker"], leg["strategy"], leg["params"])
 
             result_path = f"results/{leg['ticker']}_{leg['strategy']}.json"
-            sharpe = 0.0
             if os.path.exists(result_path):
                 with open(result_path) as f:
                     d = json.load(f)
                 sharpe = d.get("stats", {}).get("sharpe_daily", 0.0)
+            else:
+                sharpe = 0.0
 
             signals.append({
                 "ticker": leg["ticker"],
@@ -387,12 +402,59 @@ def main():
             })
             action = "LONG" if signal == 1 else ("FLAT" if signal == 0 else "SHORT")
             print(f"→ {action} (Sharpe IS={sharpe:.2f})")
+            telegram_lines.append(f"• {leg['ticker']}: {action} (Sharpe {sharpe:.2f})")
         except Exception as e:
             print(f"ERROR: {e}")
+            telegram_lines.append(f"• {leg['ticker']}: ERROR ({e})")
             continue
 
     print_signals(signals, dry_run=args.dry_run)
-    rebalance_portfolio(trading, signals, capital, dry_run=args.dry_run)
+    telegram_lines.append(f"\nPortfolio: {sum(1 for s in signals if s['signal'] == 1)} long, {sum(1 for s in signals if s['signal'] == 0)} flat")
+
+    # Notificar señales iniciales
+    send_telegram_message("\n".join(telegram_lines))
+
+    # Ejecutar/rebalancear
+    executed = rebalance_portfolio(trading, signals, capital, dry_run=args.dry_run)
+
+    # Telegram: notificar ejecuciones y P&L estimado
+    trade_lines = [f"💰 *{'DRY RUN' if args.dry_run else 'PAPER'} — Trades*\n"]
+    if not executed:
+        trade_lines.append("No se ejecutaron trades en esta corrida.")
+    else:
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M ET")
+        for idx, order in enumerate(executed, 1):
+            symbol = order.get("symbol", "?")
+            side = order.get("side", "?")
+            qty = float(order.get("qty", 0))
+            status = order.get("status", "?")
+            order_id = order.get("id", "?")
+            entry_price = order.get("filled_avg_price") or order.get("limit_price") or "?"
+            trade_lines.append(
+                f"#{idx} {side} `{symbol}` {qty} @ {entry_price}\n"
+                f"Apertura: {now_str} | Estado: {status}\n"
+                f"ID: {order_id}\n"
+            )
+
+        # Estimación simple de P&L usando última posición conocida
+        try:
+            positions = get_positions(trading)
+            for pos_symbol, pos in positions.items():
+                market_value = float(pos.get("market_value", 0))
+                avg_entry = float(pos.get("avg_entry_price", 0))
+                current_qty = float(pos.get("qty", 0))
+                side = pos.get("side", "long")
+                if current_qty == 0 or avg_entry == 0:
+                    continue
+                current_price = market_value / current_qty if current_qty else 0
+                pnl = (current_price - avg_entry) * current_qty
+                pnl_pct = ((current_price - avg_entry) / avg_entry) * 100 if avg_entry else 0
+                sign = "+" if pnl >= 0 else ""
+                trade_lines.append(f"📊 `{pos_symbol}` P&L: {sign}{pnl:,.2f} ({sign}{pnl_pct:.2f}%)")
+        except Exception as e:
+            print(f"  Warning: could not fetch P&L: {e}")
+
+    send_telegram_message("\n".join(trade_lines))
 
     mode = "DRY RUN" if args.dry_run else "PAPER TRADING"
     print(f"\n{'='*50}")
