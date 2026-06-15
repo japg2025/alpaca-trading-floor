@@ -463,5 +463,59 @@ def main():
     print(f"{'='*50}")
 
 
+def build_daily_summary(trading) -> str | None:
+    today = datetime.now().date()
+    try:
+        orders = list(trading.get_orders())
+    except Exception as e:
+        return f"⚠️ No se pudo obtener el resumen diario: {e}"
+
+    today_orders = []
+    for o in orders:
+        try:
+            o_date = pd.to_datetime(o.created_at).date()
+        except Exception:
+            continue
+        if o_date == today and str(o.status) not in {"canceled", "expired"}:
+            today_orders.append(o)
+
+    if not today_orders:
+        return None
+
+    leg_winners = {"SPY": 0, "AAPL": 0, "GOOGL": 0}
+    leg_count = {"SPY": 0, "AAPL": 0, "GOOGL": 0}
+    for o in today_orders:
+        symbol = getattr(o, "symbol", None) or getattr(o, "leg", {}).get("symbol")
+        if symbol in leg_count:
+            leg_count[symbol] += 1
+
+    try:
+        positions = get_positions(trading)
+    except Exception:
+        positions = {}
+
+    lines = [f"🗓️ *Resumen diario* — {today.isoformat()}"]
+    for symbol in ["SPY", "AAPL", "GOOGL"]:
+        count = leg_count.get(symbol, 0)
+        status = "Sin actividad"
+        if count:
+            status = f"{count} trade{'s' if count != 1 else ''} hoy"
+        lines.append(f"• {symbol}: {status}")
+        pos = positions.get(symbol)
+        if pos:
+            qty = float(pos.get("qty", 0))
+            avg_entry = float(pos.get("avg_entry_price", 0))
+            market_value = float(pos.get("market_value", 0))
+            if qty and avg_entry:
+                current_price = market_value / qty
+                pnl = (current_price - avg_entry) * qty
+                pnl_pct = ((current_price - avg_entry) / avg_entry) * 100
+                sign = "+" if pnl >= 0 else ""
+                lines.append(f"  📊 P&L: {sign}{pnl:,.2f} ({sign}{pnl_pct:.2f}%)")
+
+    send_telegram_message("\n".join(lines))
+    return "\n".join(lines)
+
+
 if __name__ == "__main__":
     main()
