@@ -17,12 +17,9 @@ from dotenv import load_dotenv
 SCHEMA = ["Date", "Open", "High", "Low", "Close", "Volume"]
 
 PORTFOLIO_LEGS = [
-    {"ticker": "AAPL", "strategy": "rsi_bullish_divergence", "params": {"timeframe_minutes": 15}},
-    {"ticker": "QQQ",  "strategy": "rsi_bullish_divergence", "params": {"timeframe_minutes": 15}},
     {"ticker": "SPY",  "strategy": "rsi_bullish_divergence", "params": {"timeframe_minutes": 15}},
-    {"ticker": "IWM",  "strategy": "rsi_bullish_divergence", "params": {"timeframe_minutes": 15}},
-    {"ticker": "GLD",  "strategy": "rsi_bullish_divergence", "params": {"timeframe_minutes": 15}},
-    {"ticker": "SLV",  "strategy": "rsi_bullish_divergence", "params": {"timeframe_minutes": 15}},
+    {"ticker": "AAPL", "strategy": "rsi_bullish_divergence", "params": {"timeframe_minutes": 15}},
+    {"ticker": "GOOGL","strategy": "rsi_bullish_divergence", "params": {"timeframe_minutes": 15}},
 ]
 
 
@@ -359,7 +356,7 @@ def main():
     if args.capital:
         capital = args.capital
     else:
-        capital = float(trading.get_account().cash)
+        capital = 1000.0  # Plan de ejecución: $1,000 base
 
     print(f"  Capital available: ${capital:,.2f}")
     print(f"  Allocation scheme: {args.scheme}")
